@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="format-detection" content="telephone=no">
+  <title>Открыть кейсы</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <div class="topbar">
+    <div class="user-info">
+      <span class="user-name" id="user-name">Загрузка...</span>
+      <span class="user-id" id="user-id">ID: ...</span>
+    </div>
+    <div class="balance-info" onclick="openStarsModal()" style="cursor:pointer;">⭐️ <span id="balance">0</span></div>
+  </div>
+
+  <div class="container">
+    <h1>Открой кейс 🎁</h1>
+    
+    <div class="cases">
+      <button class="case" data-id="1">
+        <span class="case-title">Daily Case</span>
+        <img src="pictures/images/1773263110664.png" alt="Daily Case" class="case-img">
+        <span class="case-price" id="daily-timer-card">⭐️ Бесплатно</span>
+      </button>
+      <button class="case" data-id="2">
+        <span class="case-title">Light Case</span>
+        <img src="pictures/images/1773265543104.png" alt="Light Case" class="case-img">
+        <span class="case-price">⭐️ 169</span>
+      </button>
+      <button class="case" data-id="3">
+        <span class="case-title">Evil Eye Case</span>
+        <img src="pictures/images/1773322797748.png" alt="Evil Eye Case" class="case-img">
+        <span class="case-price">⭐️ 19</span>
+      </button>
+      <button class="case" data-id="4">
+       <span class="case-title">Woman's Case</span>
+       <img src="pictures/images/1773343493149.png" alt="Woman's Case" class="case-img">
+       <span class="case-price">⭐️ 99</span>
+      </button>
+      <button class="case" data-id="5"><span class="case-title">Кейс 5</span><span class="case-price">⭐️ 400</span></button>
+      <button class="case" data-id="6"><span class="case-title">Кейс 6</span><span class="case-price">⭐️ 500</span></button>
+      <button class="case" data-id="7"><span class="case-title">Кейс 7</span><span class="case-price">⭐️ 600</span></button>
+      <button class="case" data-id="8"><span class="case-title">Кейс 8</span><span class="case-price">⭐️ 700</span></button>
+      <button class="case" data-id="9"><span class="case-title">Кейс 9</span><span class="case-price">⭐️ 800</span></button>
+      <button class="case" data-id="10"><span class="case-title">Кейс 10</span><span class="case-price">⭐️ 900</span></button>
+      <button class="case" data-id="11"><span class="case-title">Кейс 11</span><span class="case-price">⭐️ 1000</span></button>
+      <button class="case" data-id="12"><span class="case-title">Кейс 12</span><span class="case-price">⭐️ 1100</span></button>
+      <button class="case" data-id="13"><span class="case-title">Кейс 13</span><span class="case-price">⭐️ 1200</span></button>
+      <button class="case" data-id="14"><span class="case-title">Кейс 14</span><span class="case-price">⭐️ 1300</span></button>
+      <button class="case" data-id="15"><span class="case-title">Кейс 15</span><span class="case-price">⭐️ 1400</span></button>
+    </div>
+  </div>
+
+  <div id="profile-page" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:#0a0a1a; z-index:999; overflow-y:auto; padding:20px 10px 80px;">
+    <h2 style="color:white; text-align:center; margin-bottom:20px; text-shadow:0 0 15px #b44dff;">👤 Мои подарки</h2>
+    <div id="gifts-list"></div>
+    <button onclick="document.getElementById('profile-page').style.display='none'; document.querySelectorAll('.nav-btn')[0].classList.add('active'); document.querySelectorAll('.nav-btn')[2].classList.remove('active');" style="width:100%; padding:12px; background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.2); border-radius:12px; color:white; font-size:15px; cursor:pointer; margin-top:10px;">← Назад</button>
+  </div>
+
+  <div class="bottom-nav">
+    <button class="nav-btn active" onclick="showPage('cases', this)">
+      <span>🎁</span><span>Кейсы</span>
+    </button>
+    <button class="nav-btn" onclick="showPage('games', this)">
+      <span>🎮</span><span>Мини игры</span>
+    </button>
+    <button class="nav-btn" onclick="showPage('profile', this)">
+      <span>👤</span><span>Профиль</span>
+    </button>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
