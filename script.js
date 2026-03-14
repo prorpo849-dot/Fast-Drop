@@ -1,5 +1,5 @@
 // ===== НАСТРОЙКА СЕРВЕРА =====
-const API_URL = "https://railway.com/project/2d59b7e2-b5da-4a97-9fdd-b0e60f28c570?environmentId=110cc5ee-77ed-4026-bca6-3a748cd3dde6"; // ← ваш URL сервера
+const API_URL = "https://fast-drop-production.up.railway.app";
 
 
 // ===== БАЛАНС =====
@@ -18,7 +18,6 @@ async function getBalance() {
 async function setBalance(value) {
   const balance = Number(value) || 0;
 
-  // Обновляем UI сразу
   const balanceEl = document.getElementById("balance");
   if (balanceEl) balanceEl.textContent = balance;
 
@@ -26,7 +25,6 @@ async function setBalance(value) {
     el.textContent = balance;
   });
 
-  // Сохраняем на сервер
   if (currentUser) {
     try {
       await fetch(`${API_URL}/api/balance`, {
@@ -43,7 +41,7 @@ async function setBalance(value) {
   }
 }
 
-// ===== ОБНОВЛЕНИЕ БАЛАНСА ПРИ ВОЗВРАТЕ =====     ← СЮДА, В САМЫЙ КОНЕЦ
+// ===== ОБНОВЛЕНИЕ БАЛАНСА ПРИ ВОЗВРАТЕ =====
 document.addEventListener("visibilitychange", async () => {
   if (document.visibilityState === "visible" && currentUser) {
     const balance = await getBalance();
@@ -111,7 +109,6 @@ async function initUser() {
     document.getElementById("user-name").textContent = name;
     document.getElementById("user-id").textContent = "ID: " + user.id;
 
-    // Регистрируем на сервере если новый
     try {
       await fetch(`${API_URL}/api/init`, {
         method: "POST",
@@ -126,13 +123,16 @@ async function initUser() {
       console.error("init error:", err);
     }
 
-    // Загружаем баланс с сервера и обновляем UI
     const balance = await getBalance();
     const balanceEl = document.getElementById("balance");
     if (balanceEl) balanceEl.textContent = balance;
     document.querySelectorAll(".modal-balance").forEach(el => {
       el.textContent = balance;
     });
+
+    // Загружаем таймер daily с сервера
+    await refreshDailyCache();
+    updateDailyTimerOnCard();
 
     checkVipBonus(user);
 
@@ -222,7 +222,6 @@ async function saveGift(prize, caseName) {
     date: new Date().toLocaleString("ru-RU")
   };
 
-  // Сохраняем на сервер вместо localStorage
   if (currentUser) {
     try {
       await fetch(`${API_URL}/api/gifts`, {
@@ -271,14 +270,12 @@ async function getGifts() {
 // ===== ПРОДАТЬ ПРИЗ =====
 async function sellGift(code) {
 
-  // Получаем подарки с сервера
   const gifts = await getGifts();
 
   const gift = gifts.find(g => g.code === code);
 
   if (!gift) return;
 
-  // Удаляем подарок на сервере
   try {
     await fetch(`${API_URL}/api/gifts/sell`, {
       method: "POST",
@@ -303,7 +300,7 @@ async function sellGift(code) {
 // ===== ПРОФИЛЬ =====
 window.showProfile = async function() {
 
-  const gifts = await getGifts(); // ← было localStorage
+  const gifts = await getGifts();
 
   const list = document.getElementById("gifts-list");
 
@@ -400,7 +397,6 @@ async function getDailyTimeLeft() {
   }
 }
 
-// Локальный кэш таймера чтобы не дёргать сервер каждую секунду
 let dailyCachedTimeLeft = 0;
 let dailyCachedAt = 0;
 
@@ -438,10 +434,6 @@ function updateDailyTimerOnCard() {
 }
 
 setInterval(updateDailyTimerOnCard, 1000);
-setTimeout(async () => {
-  await refreshDailyCache();
-  updateDailyTimerOnCard();
-}, 100);
 
 // ===== ПРИЗЫ =====
 const prizesDaily = [
@@ -542,9 +534,9 @@ function createModal(id, title, prizes, price) {
   modal.style.display = 'none';
 
   document.getElementById(`${id}-open-btn`).addEventListener('click', async () => {
-    const balance = await getBalance(); // ← async
+    const balance = await getBalance();
     if (balance < price) { alert(`Недостаточно звёзд! Нужно ${price} ⭐️`); return; }
-    await setBalance(balance - price); // ← async
+    await setBalance(balance - price);
     document.getElementById(`${id}-open-btn`).disabled = true;
     document.getElementById(`${id}-result`).style.display = 'none';
     const prize = getPrize(prizes);
@@ -559,7 +551,7 @@ function createModal(id, title, prizes, price) {
     const offset = 32 * itemWidth - 140;
     setTimeout(() => { track.style.transition = 'transform 4s cubic-bezier(0.12, 0.8, 0.25, 1)'; track.style.transform = `translateX(-${offset}px)`; }, 100);
     setTimeout(async () => {
-      const code = await saveGift(prize, title); // ← async
+      const code = await saveGift(prize, title);
       document.getElementById(`${id}-result-img`).src = prize.img;
       document.getElementById(`${id}-result-name`).textContent = prize.name;
       document.getElementById(`${id}-result-stars`).textContent = '⭐️ ' + prize.stars + ' звёзд';
@@ -623,7 +615,7 @@ function createDailyModal() {
   modal.style.display = 'none';
 
   function updateDailyModalTimer() {
-    const left = getDailyTimeLeftCached(); // ← используем кэш
+    const left = getDailyTimeLeftCached();
     const btn = document.getElementById('daily-open-btn');
     const timerWrap = document.getElementById('daily-timer-modal-wrap');
     const timerEl = document.getElementById('daily-timer-modal');
@@ -661,7 +653,6 @@ function createDailyModal() {
     const offset = 32 * itemWidth - 140;
     setTimeout(() => { track.style.transition = 'transform 4s cubic-bezier(0.12, 0.8, 0.25, 1)'; track.style.transform = `translateX(-${offset}px)`; }, 100);
     setTimeout(async () => {
-      // Сохраняем время на сервер
       try {
         await fetch(`${API_URL}/api/daily/claim`, {
           method: "POST",
@@ -672,9 +663,9 @@ function createDailyModal() {
         console.error("daily claim error:", err);
       }
 
-      const currentBal = await getBalance(); // ← async
-      await setBalance(currentBal + prize.stars); // ← async
-      await refreshDailyCache(); // ← обновляем кэш таймера
+      const currentBal = await getBalance();
+      await setBalance(currentBal + prize.stars);
+      await refreshDailyCache();
 
       const username = currentUser ? (currentUser.username ? '@' + currentUser.username : currentUser.first_name) : 'Гость';
       const userId = currentUser ? currentUser.id : 'неизвестно';
@@ -854,9 +845,6 @@ function buyStars() {
 }
 
 
-
-
-
 async function activatePromo() {
 
   const input = document.getElementById('promo-input');
@@ -918,8 +906,6 @@ async function activatePromo() {
   }
 
 }
-
-
 
 
 function payTON() {
