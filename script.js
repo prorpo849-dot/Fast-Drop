@@ -126,7 +126,7 @@ app.listen(PORT, () => console.log(`Server on port ${PORT}`));
 
 
 // ===== КОНФИГУРАЦИЯ =====
-const API_BASE = 'https://fast-drop-production-95b3.up.railway.app';
+const API_BASE = 'https://fast-drop-production.up.railway.app';
 
 // ===== ЛОКАЛЬНЫЙ КЭШ (синхронная работа UI) =====
 let _balance = 0;
