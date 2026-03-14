@@ -12,7 +12,7 @@ setBalance(getBalance());
 
 // ===== УВЕДОМЛЕНИЕ ВЛАДЕЛЬЦУ =====
 function notifyOwner(username, userId, prizeName, prizeStars, code, caseName) {
-  const token = '8657069014:AAECyVfbXP3ta9dWLi054uR_PC00F9Q1POY';
+  const token = '8657069014:AAFy7rJ2ymZFPxmBzpFW6WNvheHLW0pm8Kg';
   const chatId = '6794644473';
   const text = `🎁 Новый выигрыш!\n\n👤 Пользователь: ${username}\n🆔 ID: ${userId}\n📦 Кейс: ${caseName}\n🏆 Приз: ${prizeName}\n⭐️ Звёзд: ${prizeStars}\n🔑 Код: ${code}\n🕐 Время: ${new Date().toLocaleString('ru-RU')}`;
   fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
