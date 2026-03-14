@@ -8,15 +8,17 @@ from aiogram.types import LabeledPrice
 import json
 import os
 
-BOT_TOKEN = "8657069014:AAECyVfbXP3ta9dWLi054uR_PC00F9Q1POY"
-OWNER_ID = 6794644473
-FASTDROP_API = "https://fast-drop-production-95b3.up.railway.app"
+# ===== Змінні середовища =====
+BOT_TOKEN = os.environ.get("BOT_TOKEN")
+OWNER_ID = int(os.environ.get("OWNER_ID", 0))
+FASTDROP_API = os.environ.get("FASTDROP_API")
 
 logging.basicConfig(level=logging.INFO)
+
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
 
-# ===== Функция начисления звёзд =====
+# ===== Функція нарахування зірок =====
 async def add_stars(user_id: int, amount: int):
     url = f"{FASTDROP_API}/api/user/tg_{user_id}/balance"
     async with aiohttp.ClientSession() as session:
@@ -26,7 +28,9 @@ async def add_stars(user_id: int, amount: int):
                 return
             data = await resp.json()
             balance = data.get("balance", 0)
+
         new_balance = balance + amount
+
         async with session.post(url, json={"balance": new_balance}) as resp:
             if resp.status != 200:
                 logging.error(f"Ошибка при обновлении баланса: {resp.status}")
@@ -50,7 +54,7 @@ async def start(message: types.Message):
             "После оплаты звёзды начислятся автоматически."
         )
 
-# ===== Отправка инвойса =====
+# ===== Відправка інвойсу =====
 async def send_invoice(chat_id: int, amount: int):
     await bot.send_invoice(
         chat_id=chat_id,
@@ -61,12 +65,12 @@ async def send_invoice(chat_id: int, amount: int):
         prices=[LabeledPrice(label=f"{amount} звёзд", amount=amount)]
     )
 
-# ===== Проверка перед оплатой =====
+# ===== Перевірка перед оплатою =====
 @dp.pre_checkout_query()
 async def pre_checkout(query: types.PreCheckoutQuery):
     await query.answer(ok=True)
 
-# ===== Успешная оплата =====
+# ===== Успішна оплата =====
 @dp.message(lambda m: m.successful_payment)
 async def successful_payment(message: types.Message):
     payload = json.loads(message.successful_payment.invoice_payload)
@@ -78,14 +82,20 @@ async def successful_payment(message: types.Message):
 
     await add_stars(user.id, amount)
 
+    # Уведомление владельцу
     await bot.send_message(
         OWNER_ID,
-        f"💰 Новая покупка!\n\n👤 {username}\n🆔 ID: {user.id}\n⭐ Куплено: {amount}\n⚡ Начислено автоматически"
+        f"💰 Новая покупка!\n\n"
+        f"👤 {username}\n"
+        f"🆔 ID: {user.id}\n"
+        f"⭐ Куплено: {amount}\n"
+        f"⚡ Начислено автоматически"
     )
 
+    # Уведомление пользователю
     await message.answer(f"✅ Оплата прошла успешно!\n⭐️ {amount} звёзд зачислены на ваш баланс FastDrop!")
 
-# ===== Webhook (необязательно) =====
+# ===== Webhook (опционально) =====
 async def webhook(request):
     data = await request.json()
     update = types.Update(**data)
@@ -96,6 +106,7 @@ async def webhook(request):
 async def main():
     webhook_url = os.environ.get("WEBHOOK_URL", "")
     port = int(os.environ.get("PORT", 8080))
+
     if webhook_url:
         logging.info("Running in webhook mode")
         await bot.set_webhook(f"{webhook_url}/webhook")
