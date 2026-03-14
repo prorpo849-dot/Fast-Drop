@@ -1,415 +1,157 @@
-// ===== НАСТРОЙКА СЕРВЕРА =====
-const API_URL = "https://fast-drop-production.up.railway.app";
-
-
-// ===== БАЛАНС =====
-async function getBalance() {
-  if (!currentUser) return 0;
-  try {
-    const res = await fetch(`${API_URL}/api/balance/${currentUser.id}`);
-    const data = await res.json();
-    return data.balance;
-  } catch (err) {
-    console.error("getBalance error:", err);
-    return 0;
-  }
+function getBalance() {
+  return parseInt(localStorage.getItem("balance")) || 0;
 }
 
-async function setBalance(value) {
-  const balance = Number(value) || 0;
-
-  const balanceEl = document.getElementById("balance");
-  if (balanceEl) balanceEl.textContent = balance;
-
-  document.querySelectorAll(".modal-balance").forEach(el => {
-    el.textContent = balance;
-  });
-
-  if (currentUser) {
-    try {
-      await fetch(`${API_URL}/api/balance`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          user_id: currentUser.id,
-          balance: balance
-        })
-      });
-    } catch (err) {
-      console.error("setBalance error:", err);
-    }
-  }
+function setBalance(value) {
+  localStorage.setItem("balance", value);
+  document.getElementById("balance").textContent = value;
+  document.querySelectorAll('.modal-balance').forEach(el => el.textContent = value);
 }
 
-// ===== ОБНОВЛЕНИЕ БАЛАНСА ПРИ ВОЗВРАТЕ =====
-document.addEventListener("visibilitychange", async () => {
-  if (document.visibilityState === "visible" && currentUser) {
-    const balance = await getBalance();
-    const balanceEl = document.getElementById("balance");
-    if (balanceEl) balanceEl.textContent = balance;
-    document.querySelectorAll(".modal-balance").forEach(el => {
-      el.textContent = balance;
-    });
-  }
-});
-
+setBalance(getBalance());
 
 // ===== УВЕДОМЛЕНИЕ ВЛАДЕЛЬЦУ =====
 function notifyOwner(username, userId, prizeName, prizeStars, code, caseName) {
-
-  const chatId = "6794644473";
-
-  const text =
-`🎁 Новый выигрыш!
-
-👤 Пользователь: ${username}
-🆔 ID: ${userId}
-
-📦 Кейс: ${caseName}
-🏆 Приз: ${prizeName}
-⭐️ Звёзд: ${prizeStars}
-
-🔑 Код: ${code}
-🕐 Время: ${new Date().toLocaleString("ru-RU")}`;
-
+  const token = '8657069014:AAECyVfbXP3ta9dWLi054uR_PC00F9Q1POY';
+  const chatId = '6794644473';
+  const text = `🎁 Новый выигрыш!\n\n👤 Пользователь: ${username}\n🆔 ID: ${userId}\n📦 Кейс: ${caseName}\n🏆 Приз: ${prizeName}\n⭐️ Звёзд: ${prizeStars}\n🔑 Код: ${code}\n🕐 Время: ${new Date().toLocaleString('ru-RU')}`;
   fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-    method: "POST",
-    headers: {"Content-Type":"application/json"},
-    body: JSON.stringify({
-      chat_id: chatId,
-      text: text
-    })
-  }).catch(err => console.log("Notify error:", err));
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ chat_id: chatId, text: text })
+  }).catch(e => console.log('Notify error:', e));
 }
 
-
-// ===== ПОЛЬЗОВАТЕЛЬ =====
+// ===== ИНИЦИАЛИЗАЦИЯ ПОЛЬЗОВАТЕЛЯ =====
 let currentUser = null;
 
-async function initUser() {
-
+function initUser() {
   try {
-
     const tg = window.Telegram.WebApp;
-
     tg.expand();
     tg.ready();
-
     const user = tg.initDataUnsafe?.user;
+    if (user) {
+      currentUser = user;
+      document.getElementById('user-name').textContent = user.username ? '@' + user.username : user.first_name;
+      document.getElementById('user-id').textContent = 'ID: ' + user.id;
 
-    if (!user) {
-      setGuest();
-      return;
-    }
-
-    currentUser = user;
-
-    const name = user.username ? "@" + user.username : user.first_name;
-
-    document.getElementById("user-name").textContent = name;
-    document.getElementById("user-id").textContent = "ID: " + user.id;
-
-    try {
-      await fetch(`${API_URL}/api/init`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          user_id: user.id,
-          username: user.username || null,
-          first_name: user.first_name || null
-        })
-      });
-    } catch (err) {
-      console.error("init error:", err);
-    }
-
-    const balance = await getBalance();
-    const balanceEl = document.getElementById("balance");
-    if (balanceEl) balanceEl.textContent = balance;
-    document.querySelectorAll(".modal-balance").forEach(el => {
-      el.textContent = balance;
-    });
-
-    // Загружаем таймер daily с сервера
-    await refreshDailyCache();
-    updateDailyTimerOnCard();
-
-    checkVipBonus(user);
-
-  } catch (e) {
-
-    setGuest();
-
-  }
-}
-
-function setGuest() {
-
-  document.getElementById("user-name").textContent = "Гость";
-  document.getElementById("user-id").textContent = "ID: откройте в Telegram";
-
-}
-
-
-// ===== VIP БОНУС =====
-async function checkVipBonus(user) {
-
-  const vipIds = [6794644473, 6227572453, 6909040298];
-
-  if (vipIds.includes(user.id)) {
-    try {
-      const res = await fetch(`${API_URL}/api/vip-check/${user.id}`);
-      const data = await res.json();
-
-      if (!data.claimed) {
-        const currentBal = await getBalance();
-        await setBalance(currentBal + 100000);
-
-        await fetch(`${API_URL}/api/vip-claim`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ user_id: user.id })
-        });
-
-        alert("👑 VIP бонус! Вам начислено 100000 ⭐️");
+      const vipIds = [6794644473, 6227572453, 6909040298];
+      const key = 'vip_bonus_' + user.id;
+      if (vipIds.includes(user.id) && !localStorage.getItem(key)) {
+        setBalance(getBalance() + 100000);
+        localStorage.setItem(key, 'true');
+        alert('👑 VIP бонус! Вам начислено 100,000 ⭐️');
       }
-    } catch (err) {
-      console.error("vip check error:", err);
+    } else {
+      document.getElementById('user-name').textContent = 'Гость';
+      document.getElementById('user-id').textContent = 'ID: откройте в Telegram';
     }
+  } catch(e) {
+    document.getElementById('user-name').textContent = 'Гость';
+    document.getElementById('user-id').textContent = 'ID: откройте в Telegram';
   }
-
 }
 
-
-// ===== ЗАГРУЗКА =====
-if (document.readyState === "complete" || document.readyState === "interactive") {
+if (document.readyState === 'complete' || document.readyState === 'interactive') {
   setTimeout(initUser, 100);
 } else {
-  window.addEventListener("DOMContentLoaded", () => {
+  window.addEventListener('DOMContentLoaded', function() {
     setTimeout(initUser, 100);
   });
 }
 
-
-// ===== ГЕНЕРАЦИЯ КОДА =====
 function generateCode() {
-
-  const chars =
-    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-
-  let code = "";
-
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+  let code = '';
   for (let i = 0; i < 6; i++) {
     code += chars[Math.floor(Math.random() * chars.length)];
   }
-
   return code;
-
 }
 
-
-// ===== СОХРАНЕНИЕ ПРИЗА =====
-async function saveGift(prize, caseName) {
-
+function saveGift(prize, caseName) {
+  const gifts = JSON.parse(localStorage.getItem('gifts') || '[]');
   const code = generateCode();
-
-  const gift = {
+  gifts.push({
     code: code,
     name: prize.name,
     img: prize.img,
     stars: prize.stars,
     caseName: caseName,
-    date: new Date().toLocaleString("ru-RU")
-  };
+    date: new Date().toLocaleString('ru-RU', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit', second:'2-digit' })
+  });
+  localStorage.setItem('gifts', JSON.stringify(gifts));
 
-  if (currentUser) {
-    try {
-      await fetch(`${API_URL}/api/gifts`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          user_id: currentUser.id,
-          gift: gift
-        })
-      });
-    } catch (err) {
-      console.error("saveGift error:", err);
-    }
-  }
-
-  const username =
-    currentUser
-      ? currentUser.username
-        ? "@" + currentUser.username
-        : currentUser.first_name
-      : "Гость";
-
-  const userId = currentUser ? currentUser.id : "неизвестно";
-
+  // Уведомляем владельца
+  const username = currentUser ? (currentUser.username ? '@' + currentUser.username : currentUser.first_name) : 'Гость';
+  const userId = currentUser ? currentUser.id : 'неизвестно';
   notifyOwner(username, userId, prize.name, prize.stars, code, caseName);
 
   return code;
-
 }
 
-
-// ===== ПОЛУЧИТЬ ПОДАРКИ =====
-async function getGifts() {
-  if (!currentUser) return [];
-  try {
-    const res = await fetch(`${API_URL}/api/gifts/${currentUser.id}`);
-    const data = await res.json();
-    return data.gifts || [];
-  } catch (err) {
-    console.error("getGifts error:", err);
-    return [];
-  }
-}
-
-
-// ===== ПРОДАТЬ ПРИЗ =====
-async function sellGift(code) {
-
-  const gifts = await getGifts();
-
+function sellGift(code) {
+  const gifts = JSON.parse(localStorage.getItem('gifts') || '[]');
   const gift = gifts.find(g => g.code === code);
-
   if (!gift) return;
-
-  try {
-    await fetch(`${API_URL}/api/gifts/sell`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        user_id: currentUser.id,
-        code: code
-      })
-    });
-  } catch (err) {
-    console.error("sellGift error:", err);
-  }
-
-  const currentBal = await getBalance();
-  await setBalance(currentBal + gift.stars);
-
+  const newGifts = gifts.filter(g => g.code !== code);
+  localStorage.setItem('gifts', JSON.stringify(newGifts));
+  setBalance(getBalance() + gift.stars);
   showProfile();
-
 }
 
-
-// ===== ПРОФИЛЬ =====
-window.showProfile = async function() {
-
-  const gifts = await getGifts();
-
-  const list = document.getElementById("gifts-list");
-
-  document.getElementById("profile-page").style.display = "block";
-
+window.showProfile = function() {
+  const gifts = JSON.parse(localStorage.getItem('gifts') || '[]');
+  const list = document.getElementById('gifts-list');
+  document.getElementById('profile-page').style.display = 'block';
   if (gifts.length === 0) {
-
-    list.innerHTML =
-      '<p style="color:#94a3b8;text-align:center;padding:20px;">У вас пока нет подарков</p>';
-
-    return;
-
+    list.innerHTML = '<p style="color:#94a3b8; text-align:center; padding:20px;">У вас пока нет подарков</p>';
+  } else {
+    list.innerHTML = [...gifts].reverse().map(g => `
+      <div style="display:flex; flex-direction:column; gap:8px; background:rgba(255,255,255,0.05); border-radius:12px; padding:10px; margin-bottom:10px; border:1px solid rgba(180,77,255,0.3);">
+        <div style="display:flex; align-items:center; gap:10px;">
+          <img src="${g.img}" style="width:50px; height:50px; object-fit:contain; border-radius:8px;">
+          <div style="flex:1;">
+            <div style="font-weight:bold; color:white; font-size:14px;">${g.name}</div>
+            <div style="color:#f59e0b; font-size:13px;">⭐️ ${g.stars}</div>
+            <div style="color:#94a3b8; font-size:11px;">${g.date}</div>
+            <div style="color:#94a3b8; font-size:11px;">📦 ${g.caseName || ''}</div>
+          </div>
+        </div>
+        <div style="color:#94a3b8; font-size:11px;">📩 За призом:</div>
+        <div style="display:flex; gap:6px;">
+          <button onclick="window.Telegram.WebApp.openTelegramLink('https://t.me/Marixbuvshuypsevd')" style="flex:1; padding:5px 8px; background:rgba(180,77,255,0.2); border:1px solid #b44dff; border-radius:8px; color:#b44dff; font-size:11px; cursor:pointer;">✉️ @Marixbuvshuypsevd</button>
+          <button onclick="window.Telegram.WebApp.openTelegramLink('https://t.me/blackrfly')" style="flex:1; padding:5px 8px; background:rgba(180,77,255,0.2); border:1px solid #b44dff; border-radius:8px; color:#b44dff; font-size:11px; cursor:pointer;">✉️ @blackrfly</button>
+        </div>
+        <div style="color:#b44dff; font-weight:bold; letter-spacing:2px; font-size:14px; text-shadow:0 0 8px #b44dff;">${g.code}</div>
+        <div style="display:flex; gap:6px;">
+          <button onclick="navigator.clipboard.writeText('${g.code}')" style="flex:1; padding:8px; background:rgba(180,77,255,0.2); border:1px solid #b44dff; border-radius:8px; color:#b44dff; font-size:12px; cursor:pointer;">📋 Копировать</button>
+          <button onclick="sellGift('${g.code}')" style="flex:1; padding:8px; background:linear-gradient(135deg, #f59e0b, #d97706); border:none; border-radius:10px; color:white; font-size:13px; font-weight:bold; cursor:pointer;">Продать ⭐️${g.stars}</button>
+        </div>
+      </div>
+    `).join('');
   }
-
-  list.innerHTML = gifts
-    .slice()
-    .reverse()
-    .map(g => createGiftHTML(g))
-    .join("");
-
-};
-
-
-function createGiftHTML(g) {
-
-  return `
-<div style="display:flex;flex-direction:column;gap:8px;background:rgba(255,255,255,0.05);border-radius:12px;padding:10px;margin-bottom:10px;border:1px solid rgba(180,77,255,0.3);">
-
-<div style="display:flex;align-items:center;gap:10px;">
-
-<img src="${g.img}" style="width:50px;height:50px;object-fit:contain;border-radius:8px;">
-
-<div style="flex:1">
-
-<div style="font-weight:bold;color:white;font-size:14px;">${g.name}</div>
-<div style="color:#f59e0b;font-size:13px;">⭐️ ${g.stars}</div>
-<div style="color:#94a3b8;font-size:11px;">${g.date}</div>
-<div style="color:#94a3b8;font-size:11px;">📦 ${g.caseName || ""}</div>
-
-</div>
-</div>
-
-<div style="color:#b44dff;font-weight:bold;letter-spacing:2px;font-size:14px;text-shadow:0 0 8px #b44dff;">
-${g.code}
-</div>
-
-<div style="display:flex;gap:6px">
-
-<button onclick="navigator.clipboard.writeText('${g.code}')"
-style="flex:1;padding:8px;background:rgba(180,77,255,0.2);border:1px solid #b44dff;border-radius:8px;color:#b44dff;font-size:12px;cursor:pointer;">
-📋 Копировать
-</button>
-
-<button onclick="sellGift('${g.code}')"
-style="flex:1;padding:8px;background:linear-gradient(135deg,#f59e0b,#d97706);border:none;border-radius:10px;color:white;font-size:13px;font-weight:bold;cursor:pointer;">
-Продать ⭐️${g.stars}
-</button>
-
-</div>
-</div>
-`;
 }
 
-
-// ===== ПЕРЕКЛЮЧЕНИЕ СТРАНИЦ =====
 window.showPage = function(page, btn) {
-
-  document.querySelectorAll(".nav-btn").forEach(b =>
-    b.classList.remove("active")
-  );
-
-  if (btn) btn.classList.add("active");
-
-  if (page === "profile") {
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  if (page === 'profile') {
     showProfile();
   } else {
-    document.getElementById("profile-page").style.display = "none";
+    document.getElementById('profile-page').style.display = 'none';
   }
-
-};
+}
 
 // ===== ЕЖЕДНЕВНЫЙ КЕЙС =====
 const DAILY_COOLDOWN = 24 * 60 * 60 * 1000;
 
-async function getDailyTimeLeft() {
-  if (!currentUser) return 0;
-  try {
-    const res = await fetch(`${API_URL}/api/daily/${currentUser.id}`);
-    const data = await res.json();
-    return data.timeLeft > 0 ? data.timeLeft : 0;
-  } catch (err) {
-    console.error("getDailyTimeLeft error:", err);
-    return 0;
-  }
-}
-
-let dailyCachedTimeLeft = 0;
-let dailyCachedAt = 0;
-
-function getDailyTimeLeftCached() {
-  if (dailyCachedAt === 0) return 0;
-  const elapsed = Date.now() - dailyCachedAt;
-  const left = dailyCachedTimeLeft - elapsed;
-  return left > 0 ? left : 0;
-}
-
-async function refreshDailyCache() {
-  dailyCachedTimeLeft = await getDailyTimeLeft();
-  dailyCachedAt = Date.now();
+function getDailyTimeLeft() {
+  const last = parseInt(localStorage.getItem('daily_last') || '0');
+  const now = Date.now();
+  const diff = DAILY_COOLDOWN - (now - last);
+  return diff > 0 ? diff : 0;
 }
 
 function formatTime(ms) {
@@ -423,7 +165,7 @@ function formatTime(ms) {
 function updateDailyTimerOnCard() {
   const el = document.getElementById('daily-timer-card');
   if (!el) return;
-  const left = getDailyTimeLeftCached();
+  const left = getDailyTimeLeft();
   if (left <= 0) {
     el.textContent = '⭐️ Бесплатно';
     el.style.color = '#f59e0b';
@@ -434,6 +176,7 @@ function updateDailyTimerOnCard() {
 }
 
 setInterval(updateDailyTimerOnCard, 1000);
+setTimeout(updateDailyTimerOnCard, 100);
 
 // ===== ПРИЗЫ =====
 const prizesDaily = [
@@ -494,7 +237,7 @@ function createModal(id, title, prizes, price) {
     <div class="modal-bg">
       <div class="modal-box">
         <div class="modal-title">🎁 ${title}</div>
-        <div style="font-size:16px; font-weight:bold; color:#f59e0b;">⭐️ <span class="modal-balance">0</span></div>
+        <div style="font-size:16px; font-weight:bold; color:#f59e0b;">⭐️ <span class="modal-balance">${getBalance()}</span></div>
         <button class="back-btn-top" id="${id}-back-top">← В меню</button>
         <div class="roulette-wrap">
           <div class="roulette-arrow">▼</div>
@@ -533,10 +276,10 @@ function createModal(id, title, prizes, price) {
   document.body.appendChild(modal);
   modal.style.display = 'none';
 
-  document.getElementById(`${id}-open-btn`).addEventListener('click', async () => {
-    const balance = await getBalance();
+  document.getElementById(`${id}-open-btn`).addEventListener('click', () => {
+    const balance = getBalance();
     if (balance < price) { alert(`Недостаточно звёзд! Нужно ${price} ⭐️`); return; }
-    await setBalance(balance - price);
+    setBalance(balance - price);
     document.getElementById(`${id}-open-btn`).disabled = true;
     document.getElementById(`${id}-result`).style.display = 'none';
     const prize = getPrize(prizes);
@@ -550,8 +293,8 @@ function createModal(id, title, prizes, price) {
     const itemWidth = 108;
     const offset = 32 * itemWidth - 140;
     setTimeout(() => { track.style.transition = 'transform 4s cubic-bezier(0.12, 0.8, 0.25, 1)'; track.style.transform = `translateX(-${offset}px)`; }, 100);
-    setTimeout(async () => {
-      const code = await saveGift(prize, title);
+    setTimeout(() => {
+      const code = saveGift(prize, title);
       document.getElementById(`${id}-result-img`).src = prize.img;
       document.getElementById(`${id}-result-name`).textContent = prize.name;
       document.getElementById(`${id}-result-stars`).textContent = '⭐️ ' + prize.stars + ' звёзд';
@@ -577,7 +320,7 @@ function createDailyModal() {
     <div class="modal-bg">
       <div class="modal-box">
         <div class="modal-title">🎁 Ежедневный кейс</div>
-        <div style="font-size:16px; font-weight:bold; color:#f59e0b;">⭐️ <span class="modal-balance">0</span></div>
+        <div style="font-size:16px; font-weight:bold; color:#f59e0b;">⭐️ <span class="modal-balance">${getBalance()}</span></div>
         <button class="back-btn-top" id="daily-back-top">← В меню</button>
         <div class="roulette-wrap">
           <div class="roulette-arrow">▼</div>
@@ -615,7 +358,7 @@ function createDailyModal() {
   modal.style.display = 'none';
 
   function updateDailyModalTimer() {
-    const left = getDailyTimeLeftCached();
+    const left = getDailyTimeLeft();
     const btn = document.getElementById('daily-open-btn');
     const timerWrap = document.getElementById('daily-timer-modal-wrap');
     const timerEl = document.getElementById('daily-timer-modal');
@@ -636,9 +379,8 @@ function createDailyModal() {
   setInterval(updateDailyModalTimer, 1000);
   updateDailyModalTimer();
 
-  document.getElementById('daily-open-btn').addEventListener('click', async () => {
-    const left = getDailyTimeLeftCached();
-    if (left > 0) return;
+  document.getElementById('daily-open-btn').addEventListener('click', () => {
+    if (getDailyTimeLeft() > 0) return;
     document.getElementById('daily-open-btn').disabled = true;
     document.getElementById('daily-result').style.display = 'none';
     const prize = getPrize(prizesDaily);
@@ -652,21 +394,9 @@ function createDailyModal() {
     const itemWidth = 108;
     const offset = 32 * itemWidth - 140;
     setTimeout(() => { track.style.transition = 'transform 4s cubic-bezier(0.12, 0.8, 0.25, 1)'; track.style.transform = `translateX(-${offset}px)`; }, 100);
-    setTimeout(async () => {
-      try {
-        await fetch(`${API_URL}/api/daily/claim`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ user_id: currentUser.id })
-        });
-      } catch (err) {
-        console.error("daily claim error:", err);
-      }
-
-      const currentBal = await getBalance();
-      await setBalance(currentBal + prize.stars);
-      await refreshDailyCache();
-
+    setTimeout(() => {
+      localStorage.setItem('daily_last', Date.now().toString());
+      setBalance(getBalance() + prize.stars);
       const username = currentUser ? (currentUser.username ? '@' + currentUser.username : currentUser.first_name) : 'Гость';
       const userId = currentUser ? currentUser.id : 'неизвестно';
       notifyOwner(username, userId, prize.name, prize.stars, '—', 'Ежедневный кейс');
@@ -725,8 +455,6 @@ style.textContent = `
   .prize-row-stars { font-size: 13px; color: #f59e0b; }
 `;
 document.head.appendChild(style);
-
-
 
 // ===== ОТКРЫТИЕ КЕЙСОВ =====
 document.querySelectorAll('.case').forEach(button => {
@@ -845,7 +573,13 @@ function buyStars() {
 }
 
 
-async function activatePromo() {
+
+const PROMO_CODES = {
+  "FREE10": 10,
+  "START50": 50
+};
+
+function activatePromo() {
 
   const input = document.getElementById('promo-input');
   const result = document.getElementById('promo-result');
@@ -858,54 +592,31 @@ async function activatePromo() {
     return;
   }
 
-  if (!currentUser) {
-    result.textContent = '❌ Откройте в Telegram!';
+  const usedKey = 'promo_used_' + code;
+
+  if (localStorage.getItem(usedKey)) {
+    result.textContent = '❌ Промокод уже использован!';
     result.style.color = '#f87171';
     return;
   }
 
-  try {
-    const res = await fetch(`${API_URL}/api/promo`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        user_id: currentUser.id,
-        code: code
-      })
-    });
+  const reward = PROMO_CODES[code];
 
-    const data = await res.json();
-
-    if (data.error === 'already_used') {
-      result.textContent = '❌ Промокод уже использован!';
-      result.style.color = '#f87171';
-      return;
-    }
-
-    if (data.error === 'invalid') {
-      result.textContent = '❌ Неверный промокод!';
-      result.style.color = '#f87171';
-      return;
-    }
-
-    if (data.success) {
-      const balanceEl = document.getElementById("balance");
-      if (balanceEl) balanceEl.textContent = data.balance;
-      document.querySelectorAll(".modal-balance").forEach(el => {
-        el.textContent = data.balance;
-      });
-
-      result.textContent = `✅ Получено +${data.reward} ⭐️`;
-      result.style.color = '#4ade80';
-    }
-
-  } catch (err) {
-    console.error("promo error:", err);
-    result.textContent = '❌ Ошибка сервера!';
+  if (!reward) {
+    result.textContent = '❌ Неверный промокод!';
     result.style.color = '#f87171';
+    return;
   }
 
+  setBalance(getBalance() + reward);
+  localStorage.setItem(usedKey, 'true');
+
+  result.textContent = `✅ Получено +${reward} ⭐️`;
+  result.style.color = '#4ade80';
+
 }
+
+
 
 
 function payTON() {
