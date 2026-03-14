@@ -6,7 +6,7 @@ from aiohttp import web
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command
 
-BOT_TOKEN = "8657069014:AAECyVfbXP3ta9dWLi054uR_PC00F9Q1POY"
+BOT_TOKEN = "8657069014:AAFy7rJ2ymZFPxmBzpFW6WNvheHLW0pm8Kg"
 OWNER_ID = 6794644473
 
 logging.basicConfig(level=logging.INFO)
