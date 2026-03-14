@@ -40,19 +40,21 @@ async def add_stars(user_id: int, amount: int):
 # ===== /start =====
 @dp.message(Command("start"))
 async def start(message: types.Message):
+    await message.answer(
+        "👋 Привет!\nЯ бот FastDrop для покупки ⭐️ звёзд.\n"
+        "Используй команду /buy <кол-во>, чтобы купить звёзды вручную.\n"
+        "Пример: /buy 100"
+    )
+
+# ===== /buy =====
+@dp.message(Command("buy"))
+async def buy_command(message: types.Message):
     args = message.text.split()
-    if len(args) > 1 and args[1].startswith("buy_"):
-        try:
-            amount = int(args[1].replace("buy_", ""))
-        except ValueError:
-            await message.answer("❌ Неверное количество звёзд")
-            return
-        await send_invoice(message.chat.id, amount)
-    else:
-        await message.answer(
-            "👋 Привет!\nЯ бот FastDrop для покупки ⭐️ звёзд.\n"
-            "После оплаты звёзды начислятся автоматически."
-        )
+    if len(args) < 2 or not args[1].isdigit():
+        await message.answer("❌ Пожалуйста, укажи количество звёзд. Пример: /buy 100")
+        return
+    amount = int(args[1])
+    await send_invoice(message.chat.id, amount)
 
 # ===== Відправка інвойсу =====
 async def send_invoice(chat_id: int, amount: int):
@@ -89,7 +91,7 @@ async def successful_payment(message: types.Message):
         f"👤 {username}\n"
         f"🆔 ID: {user.id}\n"
         f"⭐ Куплено: {amount}\n"
-        f"⚡ Начислено автоматически"
+        f"⚡ Начислено вручную"
     )
 
     # Уведомление пользователю
