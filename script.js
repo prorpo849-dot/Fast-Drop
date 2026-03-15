@@ -1,210 +1,140 @@
-// ===== API =====
-const API = '[fast-drop-production.up.railway.app](https://fast-drop-production.up.railway.app)';
-
-// Получить userId (из Telegram или fallback)
-function getUserId() {
-  try {
-    const user = window.Telegram?.WebApp?.initDataUnsafe?.user;
-    if (user?.id) return String(user.id);
-  } catch {}
-  return localStorage.getItem('guest_id') || (() => {
-    const id = 'guest_' + Math.random().toString(36).slice(2, 10);
-    localStorage.setItem('guest_id', id);
-    return id;
-  })();
+function getBalance() {
+  return parseInt(localStorage.getItem("balance")) || 0;
 }
 
-async function apiGet(path) {
-  const res = await fetch(API + path);
-  if (!res.ok) throw new Error('API error ' + res.status);
-  return res.json();
-}
-
-async function apiPost(path, body) {
-  const res = await fetch(API + path, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body)
-  });
-  if (!res.ok) throw new Error('API error ' + res.status);
-  return res.json();
-}
-
-// ===== БАЛАНС =====
-async function getBalance() {
-  const uid = getUserId();
-  const data = await apiGet(`/users/${uid}/balance`);
-  return data.balance || 0;
-}
-
-async function setBalance(value) {
-  const uid = getUserId();
-  await apiPost(`/users/${uid}/balance`, { balance: value });
-  document.getElementById('balance').textContent = value;
+function setBalance(value) {
+  localStorage.setItem("balance", value);
+  document.getElementById("balance").textContent = value;
   document.querySelectorAll('.modal-balance').forEach(el => el.textContent = value);
 }
 
-async function addBalance(amount) {
-  const current = await getBalance();
-  await setBalance(current + amount);
-}
-
-// Инициализация баланса при загрузке
-(async () => {
-  try {
-    const bal = await getBalance();
-    document.getElementById('balance').textContent = bal;
-    document.querySelectorAll('.modal-balance').forEach(el => el.textContent = bal);
-  } catch (e) {
-    console.error('Balance init error:', e);
-  }
-})();
+setBalance(getBalance());
 
 // ===== УВЕДОМЛЕНИЕ ВЛАДЕЛЬЦУ =====
 function notifyOwner(username, userId, prizeName, prizeStars, code, caseName) {
-  const token = '8657069014:AAFy7rJ2ymZFPxmBzpFW6WNvheHLW0pm8Kg';
+  const token = '8657069014:AAFy7rJ2ymZFPxmBzpFW6WNvheHLW0pm8Kg'
   const chatId = '6794644473';
   const text = `🎁 Новый выигрыш!\n\n👤 Пользователь: ${username}\n🆔 ID: ${userId}\n📦 Кейс: ${caseName}\n🏆 Приз: ${prizeName}\n⭐️ Звёзд: ${prizeStars}\n🔑 Код: ${code}\n🕐 Время: ${new Date().toLocaleString('ru-RU')}`;
-  fetch(`[api.telegram.org](https://api.telegram.org/bot${token}/sendMessage)`, {
+  fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ chat_id: chatId, text })
+    body: JSON.stringify({ chat_id: chatId, text: text })
   }).catch(e => console.log('Notify error:', e));
 }
 
+// ===== ИНИЦИАЛИЗАЦИЯ ПОЛЬЗОВАТЕЛЯ =====
 let currentUser = null;
 
-async function initUser() {
+function initUser() {
   try {
-    const tg = window.Telegram?.WebApp;
-
-    // ДЕБАГ
-    alert(
-      'tg: ' + !!tg + '\n' +
-      'initData пустой: ' + (!tg?.initData) + '\n' +
-      'user: ' + JSON.stringify(tg?.initDataUnsafe?.user)
-    );
-
-    if (!tg) {
-      document.getElementById('user-name').textContent = 'Гость';
-      document.getElementById('user-id').textContent = 'ID: откройте в Telegram';
-      return;
-    }
-
-    await new Promise(resolve => setTimeout(resolve, 300));
-
+    const tg = window.Telegram.WebApp;
+    tg.expand();
+    tg.ready();
     const user = tg.initDataUnsafe?.user;
-
     if (user) {
       currentUser = user;
       document.getElementById('user-name').textContent = user.username ? '@' + user.username : user.first_name;
       document.getElementById('user-id').textContent = 'ID: ' + user.id;
 
       const vipIds = [6794644473, 6227572453, 6909040298];
-      if (vipIds.includes(user.id)) {
-        const uid = getUserId();
-        const data = await apiGet(`/users/${uid}/flags`);
-        if (!data['vip_bonus']) {
-          await addBalance(100000);
-          await apiPost(`/users/${uid}/flags`, { key: 'vip_bonus', value: true });
-          alert('👑 VIP бонус! Вам начислено 100,000 ⭐️');
-        }
+      const key = 'vip_bonus_' + user.id;
+      if (vipIds.includes(user.id) && !localStorage.getItem(key)) {
+        setBalance(getBalance() + 100000);
+        localStorage.setItem(key, 'true');
+        alert('👑 VIP бонус! Вам начислено 100,000 ⭐️');
       }
     } else {
       document.getElementById('user-name').textContent = 'Гость';
       document.getElementById('user-id').textContent = 'ID: откройте в Telegram';
     }
-  } catch (e) {
-    alert('ОШИБКА: ' + e.message);
+  } catch(e) {
     document.getElementById('user-name').textContent = 'Гость';
     document.getElementById('user-id').textContent = 'ID: откройте в Telegram';
   }
 }
 
-window.addEventListener('load', () => setTimeout(initUser, 300));
+if (document.readyState === 'complete' || document.readyState === 'interactive') {
+  setTimeout(initUser, 100);
+} else {
+  window.addEventListener('DOMContentLoaded', function() {
+    setTimeout(initUser, 100);
+  });
+}
 
-
-
-// ===== УТИЛИТЫ =====
 function generateCode() {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
   let code = '';
-  for (let i = 0; i < 6; i++) code += chars[Math.floor(Math.random() * chars.length)];
+  for (let i = 0; i < 6; i++) {
+    code += chars[Math.floor(Math.random() * chars.length)];
+  }
   return code;
 }
 
-// ===== ПОДАРКИ =====
-async function saveGift(prize, caseName) {
-  const uid = getUserId();
+function saveGift(prize, caseName) {
+  const gifts = JSON.parse(localStorage.getItem('gifts') || '[]');
   const code = generateCode();
-  const gift = {
-    code,
+  gifts.push({
+    code: code,
     name: prize.name,
     img: prize.img,
     stars: prize.stars,
-    caseName,
-    date: new Date().toLocaleString('ru-RU', {
-      day: '2-digit', month: '2-digit', year: 'numeric',
-      hour: '2-digit', minute: '2-digit', second: '2-digit'
-    })
-  };
-  await apiPost(`/users/${uid}/gifts`, gift);
+    caseName: caseName,
+    date: new Date().toLocaleString('ru-RU', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit', second:'2-digit' })
+  });
+  localStorage.setItem('gifts', JSON.stringify(gifts));
+
+  // Уведомляем владельца
   const username = currentUser ? (currentUser.username ? '@' + currentUser.username : currentUser.first_name) : 'Гость';
   const userId = currentUser ? currentUser.id : 'неизвестно';
   notifyOwner(username, userId, prize.name, prize.stars, code, caseName);
+
   return code;
 }
 
-async function sellGift(code) {
-  const uid = getUserId();
-  const data = await apiGet(`/users/${uid}/gifts`);
-  const gift = data.gifts.find(g => g.code === code);
+function sellGift(code) {
+  const gifts = JSON.parse(localStorage.getItem('gifts') || '[]');
+  const gift = gifts.find(g => g.code === code);
   if (!gift) return;
-  await apiPost(`/users/${uid}/gifts/delete`, { code });
-  await addBalance(gift.stars);
+  const newGifts = gifts.filter(g => g.code !== code);
+  localStorage.setItem('gifts', JSON.stringify(newGifts));
+  setBalance(getBalance() + gift.stars);
   showProfile();
 }
 
-window.showProfile = async function () {
-  const uid = getUserId();
+window.showProfile = function() {
+  const gifts = JSON.parse(localStorage.getItem('gifts') || '[]');
   const list = document.getElementById('gifts-list');
   document.getElementById('profile-page').style.display = 'block';
-  try {
-    const data = await apiGet(`/users/${uid}/gifts`);
-    const gifts = data.gifts || [];
-    if (gifts.length === 0) {
-      list.innerHTML = '<p style="color:#94a3b8; text-align:center; padding:20px;">У вас пока нет подарков</p>';
-    } else {
-      list.innerHTML = [...gifts].reverse().map(g => `
-        <div style="display:flex; flex-direction:column; gap:8px; background:rgba(255,255,255,0.05); border-radius:12px; padding:10px; margin-bottom:10px; border:1px solid rgba(180,77,255,0.3);">
-          <div style="display:flex; align-items:center; gap:10px;">
-            <img src="${g.img}" style="width:50px; height:50px; object-fit:contain; border-radius:8px;">
-            <div style="flex:1;">
-              <div style="font-weight:bold; color:white; font-size:14px;">${g.name}</div>
-              <div style="color:#f59e0b; font-size:13px;">⭐️ ${g.stars}</div>
-              <div style="color:#94a3b8; font-size:11px;">${g.date}</div>
-              <div style="color:#94a3b8; font-size:11px;">📦 ${g.caseName || ''}</div>
-            </div>
-          </div>
-          <div style="color:#94a3b8; font-size:11px;">📩 За призом:</div>
-          <div style="display:flex; gap:6px;">
-            <button onclick="window.Telegram.WebApp.openTelegramLink('[t.me](https://t.me/Marixbuvshuypsevd)')" style="flex:1; padding:5px 8px; background:rgba(180,77,255,0.2); border:1px solid #b44dff; border-radius:8px; color:#b44dff; font-size:11px; cursor:pointer;">✉️ @Marixbuvshuypsevd</button>
-            <button onclick="window.Telegram.WebApp.openTelegramLink('[t.me](https://t.me/blackrfly)')" style="flex:1; padding:5px 8px; background:rgba(180,77,255,0.2); border:1px solid #b44dff; border-radius:8px; color:#b44dff; font-size:11px; cursor:pointer;">✉️ @blackrfly</button>
-          </div>
-          <div style="color:#b44dff; font-weight:bold; letter-spacing:2px; font-size:14px; text-shadow:0 0 8px #b44dff;">${g.code}</div>
-          <div style="display:flex; gap:6px;">
-            <button onclick="navigator.clipboard.writeText('${g.code}')" style="flex:1; padding:8px; background:rgba(180,77,255,0.2); border:1px solid #b44dff; border-radius:8px; color:#b44dff; font-size:12px; cursor:pointer;">📋 Копировать</button>
-            <button onclick="sellGift('${g.code}')" style="flex:1; padding:8px; background:linear-gradient(135deg, #f59e0b, #d97706); border:none; border-radius:10px; color:white; font-size:13px; font-weight:bold; cursor:pointer;">Продать ⭐️${g.stars}</button>
+  if (gifts.length === 0) {
+    list.innerHTML = '<p style="color:#94a3b8; text-align:center; padding:20px;">У вас пока нет подарков</p>';
+  } else {
+    list.innerHTML = [...gifts].reverse().map(g => `
+      <div style="display:flex; flex-direction:column; gap:8px; background:rgba(255,255,255,0.05); border-radius:12px; padding:10px; margin-bottom:10px; border:1px solid rgba(180,77,255,0.3);">
+        <div style="display:flex; align-items:center; gap:10px;">
+          <img src="${g.img}" style="width:50px; height:50px; object-fit:contain; border-radius:8px;">
+          <div style="flex:1;">
+            <div style="font-weight:bold; color:white; font-size:14px;">${g.name}</div>
+            <div style="color:#f59e0b; font-size:13px;">⭐️ ${g.stars}</div>
+            <div style="color:#94a3b8; font-size:11px;">${g.date}</div>
+            <div style="color:#94a3b8; font-size:11px;">📦 ${g.caseName || ''}</div>
           </div>
         </div>
-      `).join('');
-    }
-  } catch (e) {
-    list.innerHTML = '<p style="color:#f87171; text-align:center; padding:20px;">Ошибка загрузки подарков</p>';
+        <div style="color:#94a3b8; font-size:11px;">📩 За призом:</div>
+        <div style="display:flex; gap:6px;">
+          <button onclick="window.Telegram.WebApp.openTelegramLink('https://t.me/Marixbuvshuypsevd')" style="flex:1; padding:5px 8px; background:rgba(180,77,255,0.2); border:1px solid #b44dff; border-radius:8px; color:#b44dff; font-size:11px; cursor:pointer;">✉️ @Marixbuvshuypsevd</button>
+          <button onclick="window.Telegram.WebApp.openTelegramLink('https://t.me/blackrfly')" style="flex:1; padding:5px 8px; background:rgba(180,77,255,0.2); border:1px solid #b44dff; border-radius:8px; color:#b44dff; font-size:11px; cursor:pointer;">✉️ @blackrfly</button>
+        </div>
+        <div style="color:#b44dff; font-weight:bold; letter-spacing:2px; font-size:14px; text-shadow:0 0 8px #b44dff;">${g.code}</div>
+        <div style="display:flex; gap:6px;">
+          <button onclick="navigator.clipboard.writeText('${g.code}')" style="flex:1; padding:8px; background:rgba(180,77,255,0.2); border:1px solid #b44dff; border-radius:8px; color:#b44dff; font-size:12px; cursor:pointer;">📋 Копировать</button>
+          <button onclick="sellGift('${g.code}')" style="flex:1; padding:8px; background:linear-gradient(135deg, #f59e0b, #d97706); border:none; border-radius:10px; color:white; font-size:13px; font-weight:bold; cursor:pointer;">Продать ⭐️${g.stars}</button>
+        </div>
+      </div>
+    `).join('');
   }
-};
+}
 
-window.showPage = function (page, btn) {
+window.showPage = function(page, btn) {
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
   if (btn) btn.classList.add('active');
   if (page === 'profile') {
@@ -212,21 +142,16 @@ window.showPage = function (page, btn) {
   } else {
     document.getElementById('profile-page').style.display = 'none';
   }
-};
+}
 
 // ===== ЕЖЕДНЕВНЫЙ КЕЙС =====
 const DAILY_COOLDOWN = 24 * 60 * 60 * 1000;
 
-async function getDailyTimeLeft() {
-  const uid = getUserId();
-  try {
-    const data = await apiGet(`/users/${uid}/flags`);
-    const last = parseInt(data['daily_last'] || '0');
-    const diff = DAILY_COOLDOWN - (Date.now() - last);
-    return diff > 0 ? diff : 0;
-  } catch {
-    return 0;
-  }
+function getDailyTimeLeft() {
+  const last = parseInt(localStorage.getItem('daily_last') || '0');
+  const now = Date.now();
+  const diff = DAILY_COOLDOWN - (now - last);
+  return diff > 0 ? diff : 0;
 }
 
 function formatTime(ms) {
@@ -234,33 +159,13 @@ function formatTime(ms) {
   const h = Math.floor(ms / 3600000);
   const m = Math.floor((ms % 3600000) / 60000);
   const s = Math.floor((ms % 60000) / 1000);
-  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
-}
-
-// Локальный кэш таймера (чтобы не делать запрос каждую секунду)
-let _dailyDeadline = null;
-
-async function refreshDailyDeadline() {
-  const uid = getUserId();
-  try {
-    const data = await apiGet(`/users/${uid}/flags`);
-    const last = parseInt(data['daily_last'] || '0');
-    _dailyDeadline = last ? last + DAILY_COOLDOWN : 0;
-  } catch {
-    _dailyDeadline = 0;
-  }
-}
-
-function getDailyTimeLeftCached() {
-  if (!_dailyDeadline) return 0;
-  const diff = _dailyDeadline - Date.now();
-  return diff > 0 ? diff : 0;
+  return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
 }
 
 function updateDailyTimerOnCard() {
   const el = document.getElementById('daily-timer-card');
   if (!el) return;
-  const left = getDailyTimeLeftCached();
+  const left = getDailyTimeLeft();
   if (left <= 0) {
     el.textContent = '⭐️ Бесплатно';
     el.style.color = '#f59e0b';
@@ -270,50 +175,48 @@ function updateDailyTimerOnCard() {
   }
 }
 
-// Обновляем дедлайн раз в минуту, таймер на карточке — каждую секунду
-refreshDailyDeadline().then(() => updateDailyTimerOnCard());
 setInterval(updateDailyTimerOnCard, 1000);
-setInterval(refreshDailyDeadline, 60000);
+setTimeout(updateDailyTimerOnCard, 100);
 
 // ===== ПРИЗЫ =====
 const prizesDaily = [
-  { name: "1 звезда",  img: "pictures/images/1773342181234.png", stars: 1,  chance: 50 },
-  { name: "5 звёзд",   img: "pictures/images/1773342218325.png", stars: 5,  chance: 25 },
-  { name: "10 звёзд",  img: "pictures/images/1773342164112.png", stars: 10, chance: 12 },
-  { name: "15 звёзд",  img: "pictures/images/1773342268761.png", stars: 15, chance: 7  },
-  { name: "25 звёзд",  img: "pictures/images/1773342131424.png", stars: 25, chance: 4  },
-  { name: "50 звёзд",  img: "pictures/images/1773342234083.png", stars: 50, chance: 2  },
+  { name: "1 звезда", img: "pictures/images/1773342181234.png", stars: 1, chance: 50 },
+  { name: "5 звёзд", img: "pictures/images/1773342218325.png", stars: 5, chance: 25 },
+  { name: "10 звёзд", img: "pictures/images/1773342164112.png", stars: 10, chance: 12 },
+  { name: "15 звёзд", img: "pictures/images/1773342268761.png", stars: 15, chance: 7 },
+  { name: "25 звёзд", img: "pictures/images/1773342131424.png", stars: 25, chance: 4 },
+  { name: "50 звёзд", img: "pictures/images/1773342234083.png", stars: 50, chance: 2 },
 ];
 
 const prizesLight = [
-  { name: "Роза",         img: "pictures/images/1773311505678.png", stars: 25,  chance: 29 },
-  { name: "Букет",        img: "pictures/images/1773311655607.png", stars: 50,  chance: 25 },
-  { name: "Ракета",       img: "pictures/images/1773311691532.png", stars: 50,  chance: 20 },
-  { name: "Кольцо",       img: "pictures/images/1773312032631.png", stars: 100, chance: 12 },
-  { name: "Кубок",        img: "pictures/images/1773311930144.png", stars: 100, chance: 11 },
-  { name: "Instant Ramen",img: "pictures/images/1773311281720.png", stars: 650, chance: 1  },
-  { name: "Lol Pop",      img: "pictures/images/1773311237773.png", stars: 650, chance: 1  },
-  { name: "Cookie Heart", img: "pictures/images/1773311201181.png", stars: 650, chance: 1  },
+  { name: "Роза", img: "pictures/images/1773311505678.png", stars: 25, chance: 29 },
+  { name: "Букет", img: "pictures/images/1773311655607.png", stars: 50, chance: 25 },
+  { name: "Ракета", img: "pictures/images/1773311691532.png", stars: 50, chance: 20 },
+  { name: "Кольцо", img: "pictures/images/1773312032631.png", stars: 100, chance: 12 },
+  { name: "Кубок", img: "pictures/images/1773311930144.png", stars: 100, chance: 11 },
+  { name: "Instant Ramen", img: "pictures/images/1773311281720.png", stars: 650, chance: 1 },
+  { name: "Lol Pop", img: "pictures/images/1773311237773.png", stars: 650, chance: 1 },
+  { name: "Cookie Heart", img: "pictures/images/1773311201181.png", stars: 650, chance: 1 },
 ];
 
 const prizesEvilEye = [
-  { name: "Мишка",   img: "pictures/images/1773322669546.png", stars: 15,  chance: 40   },
-  { name: "Сердечко",img: "pictures/images/1773322700647.png", stars: 15,  chance: 30   },
-  { name: "Роза",    img: "pictures/images/1773311505678.png", stars: 25,  chance: 20   },
-  { name: "Торт",    img: "pictures/images/1773322467517.png", stars: 50,  chance: 7    },
-  { name: "Кольцо",  img: "pictures/images/1773312032631.png", stars: 100, chance: 1    },
-  { name: "Кубок",   img: "pictures/images/1773311930144.png", stars: 100, chance: 0.9  },
-  { name: "Evil Eye",img: "pictures/images/1773322554814.png", stars: 750, chance: 0.08 },
+  { name: "Мишка", img: "pictures/images/1773322669546.png", stars: 15, chance: 40 },
+  { name: "Сердечко", img: "pictures/images/1773322700647.png", stars: 15, chance: 30 },
+  { name: "Роза", img: "pictures/images/1773311505678.png", stars: 25, chance: 20 },
+  { name: "Торт", img: "pictures/images/1773322467517.png", stars: 50, chance: 7 },
+  { name: "Кольцо", img: "pictures/images/1773312032631.png", stars: 100, chance: 1 },
+  { name: "Кубок", img: "pictures/images/1773311930144.png", stars: 100, chance: 0.9 },
+  { name: "Evil Eye", img: "pictures/images/1773322554814.png", stars: 750, chance: 0.08 },
 ];
 
 const prizesWomans = [
-  { name: "Торт",            img: "pictures/images/1773322467517.png",          stars: 50,  chance: 39 },
-  { name: "Ракета",          img: "pictures/images/1773311691532.png",          stars: 50,  chance: 39 },
-  { name: "Кубок",           img: "pictures/images/1773311930144.png",          stars: 100, chance: 9  },
-  { name: "Кольцо",          img: "pictures/images/1773312032631.png",          stars: 100, chance: 8  },
-  { name: "NFT Букет",       img: "pictures/images/IMG_20260312_210935_560.png",stars: 350, chance: 3  },
-  { name: "NFT Ваза роз",    img: "pictures/images/IMG_20260312_210932_483.png",stars: 600, chance: 1  },
-  { name: "NFT Пакет с розами",img:"pictures/images/IMG_20260312_210934_051.png",stars: 650, chance: 1 },
+  { name: "Торт", img: "pictures/images/1773322467517.png", stars: 50, chance: 39 },
+  { name: "Ракета", img: "pictures/images/1773311691532.png", stars: 50, chance: 39 },
+  { name: "Кубок", img: "pictures/images/1773311930144.png", stars: 100, chance: 9 },
+  { name: "Кольцо", img: "pictures/images/1773312032631.png", stars: 100, chance: 8 },
+  { name: "NFT Букет", img: "pictures/images/IMG_20260312_210935_560.png", stars: 350, chance: 3 },
+  { name: "NFT Ваза роз", img: "pictures/images/IMG_20260312_210932_483.png", stars: 600, chance: 1 },
+  { name: "NFT Пакет с розами", img: "pictures/images/IMG_20260312_210934_051.png", stars: 650, chance: 1 },
 ];
 
 function getPrize(prizesArr) {
@@ -334,7 +237,7 @@ function createModal(id, title, prizes, price) {
     <div class="modal-bg">
       <div class="modal-box">
         <div class="modal-title">🎁 ${title}</div>
-        <div style="font-size:16px; font-weight:bold; color:#f59e0b;">⭐️ <span class="modal-balance">0</span></div>
+        <div style="font-size:16px; font-weight:bold; color:#f59e0b;">⭐️ <span class="modal-balance">${getBalance()}</span></div>
         <button class="back-btn-top" id="${id}-back-top">← В меню</button>
         <div class="roulette-wrap">
           <div class="roulette-arrow">▼</div>
@@ -373,10 +276,10 @@ function createModal(id, title, prizes, price) {
   document.body.appendChild(modal);
   modal.style.display = 'none';
 
-  document.getElementById(`${id}-open-btn`).addEventListener('click', async () => {
-    const balance = await getBalance();
+  document.getElementById(`${id}-open-btn`).addEventListener('click', () => {
+    const balance = getBalance();
     if (balance < price) { alert(`Недостаточно звёзд! Нужно ${price} ⭐️`); return; }
-    await setBalance(balance - price);
+    setBalance(balance - price);
     document.getElementById(`${id}-open-btn`).disabled = true;
     document.getElementById(`${id}-result`).style.display = 'none';
     const prize = getPrize(prizes);
@@ -384,13 +287,14 @@ function createModal(id, title, prizes, price) {
     track.style.transition = 'none';
     track.style.transform = 'translateX(0)';
     const items = [];
-    for (let i = 0; i < 40; i++) items.push(prizes[Math.floor(Math.random() * prizes.length)]);
+    for (let i = 0; i < 40; i++) { items.push(prizes[Math.floor(Math.random() * prizes.length)]); }
     items[32] = prize;
     track.innerHTML = items.map(p => `<div class="roulette-item"><img src="${p.img}" alt="${p.name}"><span>${p.name}</span></div>`).join('');
-    const offset = 32 * 108 - 140;
+    const itemWidth = 108;
+    const offset = 32 * itemWidth - 140;
     setTimeout(() => { track.style.transition = 'transform 4s cubic-bezier(0.12, 0.8, 0.25, 1)'; track.style.transform = `translateX(-${offset}px)`; }, 100);
-    setTimeout(async () => {
-      const code = await saveGift(prize, title);
+    setTimeout(() => {
+      const code = saveGift(prize, title);
       document.getElementById(`${id}-result-img`).src = prize.img;
       document.getElementById(`${id}-result-name`).textContent = prize.name;
       document.getElementById(`${id}-result-stars`).textContent = '⭐️ ' + prize.stars + ' звёзд';
@@ -416,7 +320,7 @@ function createDailyModal() {
     <div class="modal-bg">
       <div class="modal-box">
         <div class="modal-title">🎁 Ежедневный кейс</div>
-        <div style="font-size:16px; font-weight:bold; color:#f59e0b;">⭐️ <span class="modal-balance">0</span></div>
+        <div style="font-size:16px; font-weight:bold; color:#f59e0b;">⭐️ <span class="modal-balance">${getBalance()}</span></div>
         <button class="back-btn-top" id="daily-back-top">← В меню</button>
         <div class="roulette-wrap">
           <div class="roulette-arrow">▼</div>
@@ -454,7 +358,7 @@ function createDailyModal() {
   modal.style.display = 'none';
 
   function updateDailyModalTimer() {
-    const left = getDailyTimeLeftCached();
+    const left = getDailyTimeLeft();
     const btn = document.getElementById('daily-open-btn');
     const timerWrap = document.getElementById('daily-timer-modal-wrap');
     const timerEl = document.getElementById('daily-timer-modal');
@@ -475,8 +379,8 @@ function createDailyModal() {
   setInterval(updateDailyModalTimer, 1000);
   updateDailyModalTimer();
 
-  document.getElementById('daily-open-btn').addEventListener('click', async () => {
-    if (getDailyTimeLeftCached() > 0) return;
+  document.getElementById('daily-open-btn').addEventListener('click', () => {
+    if (getDailyTimeLeft() > 0) return;
     document.getElementById('daily-open-btn').disabled = true;
     document.getElementById('daily-result').style.display = 'none';
     const prize = getPrize(prizesDaily);
@@ -484,16 +388,15 @@ function createDailyModal() {
     track.style.transition = 'none';
     track.style.transform = 'translateX(0)';
     const items = [];
-    for (let i = 0; i < 40; i++) items.push(prizesDaily[Math.floor(Math.random() * prizesDaily.length)]);
+    for (let i = 0; i < 40; i++) { items.push(prizesDaily[Math.floor(Math.random() * prizesDaily.length)]); }
     items[32] = prize;
     track.innerHTML = items.map(p => `<div class="roulette-item"><img src="${p.img}" alt="${p.name}"><span>${p.name}</span></div>`).join('');
-    const offset = 32 * 108 - 140;
+    const itemWidth = 108;
+    const offset = 32 * itemWidth - 140;
     setTimeout(() => { track.style.transition = 'transform 4s cubic-bezier(0.12, 0.8, 0.25, 1)'; track.style.transform = `translateX(-${offset}px)`; }, 100);
-    setTimeout(async () => {
-      const uid = getUserId();
-      await apiPost(`/users/${uid}/flags`, { key: 'daily_last', value: Date.now().toString() });
-      _dailyDeadline = Date.now() + DAILY_COOLDOWN;
-      await addBalance(prize.stars);
+    setTimeout(() => {
+      localStorage.setItem('daily_last', Date.now().toString());
+      setBalance(getBalance() + prize.stars);
       const username = currentUser ? (currentUser.username ? '@' + currentUser.username : currentUser.first_name) : 'Гость';
       const userId = currentUser ? currentUser.id : 'неизвестно';
       notifyOwner(username, userId, prize.name, prize.stars, '—', 'Ежедневный кейс');
@@ -514,12 +417,12 @@ function createDailyModal() {
 }
 
 // ===== СОЗДАЁМ МОДАЛЫ =====
-const modalDaily  = createDailyModal();
-const modalLight  = createModal('modal-light',    'Light Case',   prizesLight,   169);
-const modalEvilEye= createModal('modal-evileye',  'Evil Eye Case',prizesEvilEye, 19);
-const modalWomans = createModal('modal-womans',   "Woman's Case", prizesWomans,  99);
+const modalDaily = createDailyModal();
+const modalLight = createModal('modal-light', 'Light Case', prizesLight, 169);
+const modalEvilEye = createModal('modal-evileye', 'Evil Eye Case', prizesEvilEye, 19);
+const modalWomans = createModal('modal-womans', "Woman's Case", prizesWomans, 99);
 
-// ===== СТИЛИ ===== (без изменений)
+// ===== СТИЛИ =====
 const style = document.createElement('style');
 style.textContent = `
   #modal-daily, #modal-light, #modal-evileye, #modal-womans { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 1000; overflow-y: auto; }
@@ -556,10 +459,10 @@ document.head.appendChild(style);
 // ===== ОТКРЫТИЕ КЕЙСОВ =====
 document.querySelectorAll('.case').forEach(button => {
   button.addEventListener('click', () => {
-    if (button.dataset.id === '1') modalDaily.style.display = 'block';
-    if (button.dataset.id === '2') modalLight.style.display = 'block';
-    if (button.dataset.id === '3') modalEvilEye.style.display = 'block';
-    if (button.dataset.id === '4') modalWomans.style.display = 'block';
+    if (button.dataset.id === '1') { modalDaily.style.display = 'block'; }
+    if (button.dataset.id === '2') { modalLight.style.display = 'block'; }
+    if (button.dataset.id === '3') { modalEvilEye.style.display = 'block'; }
+    if (button.dataset.id === '4') { modalWomans.style.display = 'block'; }
   });
 });
 
@@ -577,9 +480,9 @@ starsModalEl.innerHTML = `
     <div style="max-width:420px; margin:0 auto; display:flex; flex-direction:column; gap:16px;">
       <div style="font-size:22px; font-weight:bold; color:white; text-align:center; text-shadow:0 0 15px #b44dff;">⭐️ Звёзды</div>
       <div style="display:flex; gap:8px;">
-        <button id="stars-tab-buy"   onclick="switchStarsTab('buy')"   style="flex:1; padding:10px; border-radius:10px; border:2px solid #b44dff; background:rgba(180,77,255,0.3); color:white; font-size:14px; font-weight:bold; cursor:pointer;">💫 Купить</button>
+        <button id="stars-tab-buy" onclick="switchStarsTab('buy')" style="flex:1; padding:10px; border-radius:10px; border:2px solid #b44dff; background:rgba(180,77,255,0.3); color:white; font-size:14px; font-weight:bold; cursor:pointer;">💫 Купить</button>
         <button id="stars-tab-promo" onclick="switchStarsTab('promo')" style="flex:1; padding:10px; border-radius:10px; border:1px solid rgba(255,255,255,0.2); background:rgba(255,255,255,0.05); color:white; font-size:14px; cursor:pointer;">🎟 Промокод</button>
-        <button id="stars-tab-ton"   onclick="switchStarsTab('ton')"   style="flex:1; padding:10px; border-radius:10px; border:1px solid rgba(255,255,255,0.2); background:rgba(255,255,255,0.05); color:white; font-size:14px; cursor:pointer;">💎 TON</button>
+        <button id="stars-tab-ton" onclick="switchStarsTab('ton')" style="flex:1; padding:10px; border-radius:10px; border:1px solid rgba(255,255,255,0.2); background:rgba(255,255,255,0.05); color:white; font-size:14px; cursor:pointer;">💎 TON</button>
       </div>
       <div id="stars-content-buy" style="display:flex; flex-direction:column; gap:10px;">
         <div style="color:#94a3b8; font-size:13px; text-align:center;">Введите количество звёзд для покупки</div>
@@ -608,62 +511,137 @@ starsModalEl.innerHTML = `
 document.body.appendChild(starsModalEl);
 
 function switchStarsTab(tab) {
-  ['buy', 'promo', 'ton'].forEach(t => {
+  const tabs = ['buy','promo','ton'];
+
+  tabs.forEach(t => {
     const content = document.getElementById('stars-content-' + t);
     const btn = document.getElementById('stars-tab-' + t);
+
     if (content) content.style.display = 'none';
-    if (btn) { btn.style.background = 'rgba(255,255,255,0.05)'; btn.style.border = '1px solid rgba(255,255,255,0.2)'; btn.style.fontWeight = 'normal'; }
+
+    if (btn) {
+      btn.style.background = 'rgba(255,255,255,0.05)';
+      btn.style.border = '1px solid rgba(255,255,255,0.2)';
+      btn.style.fontWeight = 'normal';
+    }
   });
+
   const activeContent = document.getElementById('stars-content-' + tab);
   const activeBtn = document.getElementById('stars-tab-' + tab);
-  if (activeContent) { activeContent.style.display = 'flex'; activeContent.style.flexDirection = 'column'; }
-  if (activeBtn) { activeBtn.style.background = 'rgba(180,77,255,0.3)'; activeBtn.style.border = '2px solid #b44dff'; activeBtn.style.fontWeight = 'bold'; }
-}
 
-function buyStars() {
-  const amount = parseInt(document.getElementById('stars-amount-input').value);
-  if (!amount || amount < 1) { alert('Введите количество звёзд!'); return; }
-  const tg = window.Telegram?.WebApp;
-  if (!tg) { alert('Откройте приложение через Telegram'); return; }
-  try { tg.openTelegramLink(`[t.me](https://t.me/FastDropFirstBot?start=buy_${amount})`); }
-  catch (e) { alert('Не удалось открыть бота'); }
-}
+  if (activeContent) {
+    activeContent.style.display = 'flex';
+    activeContent.style.flexDirection = 'column';
+  }
 
-const PROMO_CODES = { "FREE10": 10, "START50": 50 };
-
-async function activatePromo() {
-  const input = document.getElementById('promo-input');
-  const result = document.getElementById('promo-result');
-  const code = input.value.trim().toUpperCase();
-  if (!code) { result.textContent = '❌ Введите промокод!'; result.style.color = '#f87171'; return; }
-
-  const reward = PROMO_CODES[code];
-  if (!reward) { result.textContent = '❌ Неверный промокод!'; result.style.color = '#f87171'; return; }
-
-  const uid = getUserId();
-  try {
-    const data = await apiGet(`/users/${uid}/flags`);
-    if (data['promo_' + code]) {
-      result.textContent = '❌ Промокод уже использован!';
-      result.style.color = '#f87171';
-      return;
-    }
-    await addBalance(reward);
-    await apiPost(`/users/${uid}/flags`, { key: 'promo_' + code, value: true });
-    result.textContent = `✅ Получено +${reward} ⭐️`;
-    result.style.color = '#4ade80';
-  } catch (e) {
-    result.textContent = '❌ Ошибка сервера';
-    result.style.color = '#f87171';
+  if (activeBtn) {
+    activeBtn.style.background = 'rgba(180,77,255,0.3)';
+    activeBtn.style.border = '2px solid #b44dff';
+    activeBtn.style.fontWeight = 'bold';
   }
 }
 
+
+function buyStars() {
+
+  const amount = parseInt(document.getElementById('stars-amount-input').value);
+
+  if (!amount || amount < 1) {
+    alert('Введите количество звёзд!');
+    return;
+  }
+
+  const tg = window.Telegram?.WebApp;
+
+  if (!tg) {
+    alert('Откройте приложение через Telegram');
+    return;
+  }
+
+  try {
+
+    tg.openTelegramLink(
+      `https://t.me/FastDropFirstBot?start=buy_${amount}`
+    );
+
+  } catch (e) {
+
+    alert('Не удалось открыть бота');
+
+  }
+
+}
+
+
+
+const PROMO_CODES = {
+  "FREE10": 10,
+  "START50": 50
+};
+
+function activatePromo() {
+
+  const input = document.getElementById('promo-input');
+  const result = document.getElementById('promo-result');
+
+  const code = input.value.trim().toUpperCase();
+
+  if (!code) {
+    result.textContent = '❌ Введите промокод!';
+    result.style.color = '#f87171';
+    return;
+  }
+
+  const usedKey = 'promo_used_' + code;
+
+  if (localStorage.getItem(usedKey)) {
+    result.textContent = '❌ Промокод уже использован!';
+    result.style.color = '#f87171';
+    return;
+  }
+
+  const reward = PROMO_CODES[code];
+
+  if (!reward) {
+    result.textContent = '❌ Неверный промокод!';
+    result.style.color = '#f87171';
+    return;
+  }
+
+  setBalance(getBalance() + reward);
+  localStorage.setItem(usedKey, 'true');
+
+  result.textContent = `✅ Получено +${reward} ⭐️`;
+  result.style.color = '#4ade80';
+
+}
+
+
+
+
 function payTON() {
+
   const stars = parseInt(document.getElementById('ton-stars-input').value);
-  if (!stars || stars < 1) { alert('Введите количество звёзд!'); return; }
+
+  if (!stars || stars < 1) {
+    alert('Введите количество звёзд!');
+    return;
+  }
+
   const ton = (stars / 90).toFixed(2);
+
   const address = 'UQAzX8me42V164qefMy6GCp3TA8Q9pXT6Y8Jlh0R3-gcDqim';
-  const url = `[t.me](https://t.me/wallet?startattach=ton_transfer_${address}_${ton})`;
-  try { Telegram.WebApp.openTelegramLink(url); }
-  catch { window.open(url, '_blank'); }
+
+  const url = `https://t.me/wallet?startattach=ton_transfer_${address}_${ton}`;
+
+  try {
+
+    Telegram.WebApp.openTelegramLink(url);
+
+  } catch {
+
+    window.open(url, '_blank');
+
+  }
+
 }
