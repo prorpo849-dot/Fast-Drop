@@ -77,10 +77,19 @@ let currentUser = null;
 
 async function initUser() {
   try {
-    const tg = window.Telegram.WebApp;
-    tg.expand();
-    tg.ready();
+    const tg = window.tgApp || window.Telegram?.WebApp;
+
+    if (!tg) {
+      document.getElementById('user-name').textContent = 'Гость';
+      document.getElementById('user-id').textContent = 'ID: откройте в Telegram';
+      return;
+    }
+
+    // Ждём пока Telegram передаст данные пользователя
+    await new Promise(resolve => setTimeout(resolve, 300));
+
     const user = tg.initDataUnsafe?.user;
+
     if (user) {
       currentUser = user;
       document.getElementById('user-name').textContent = user.username ? '@' + user.username : user.first_name;
@@ -101,16 +110,15 @@ async function initUser() {
       document.getElementById('user-id').textContent = 'ID: откройте в Telegram';
     }
   } catch (e) {
+    console.error('initUser error:', e);
     document.getElementById('user-name').textContent = 'Гость';
     document.getElementById('user-id').textContent = 'ID: откройте в Telegram';
   }
 }
 
-if (document.readyState === 'complete' || document.readyState === 'interactive') {
-  setTimeout(initUser, 100);
-} else {
-  window.addEventListener('DOMContentLoaded', () => setTimeout(initUser, 100));
-}
+// Запускаем после полной загрузки страницы
+window.addEventListener('load', () => setTimeout(initUser, 300));
+
 
 // ===== УТИЛИТЫ =====
 function generateCode() {
