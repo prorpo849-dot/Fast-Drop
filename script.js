@@ -76,7 +76,7 @@ let currentUser = null;
 
 async function initUser() {
   try {
-    const tg = window.tgApp || window.Telegram?.WebApp;
+    const tg = window.Telegram?.WebApp;
 
     // ДЕБАГ
     alert(
