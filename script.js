@@ -72,12 +72,18 @@ function notifyOwner(username, userId, prizeName, prizeStars, code, caseName) {
   }).catch(e => console.log('Notify error:', e));
 }
 
-// ===== ИНИЦИАЛИЗАЦИЯ ПОЛЬЗОВАТЕЛЯ =====
 let currentUser = null;
 
 async function initUser() {
   try {
     const tg = window.tgApp || window.Telegram?.WebApp;
+
+    // ДЕБАГ
+    alert(
+      'tg: ' + !!tg + '\n' +
+      'initData пустой: ' + (!tg?.initData) + '\n' +
+      'user: ' + JSON.stringify(tg?.initDataUnsafe?.user)
+    );
 
     if (!tg) {
       document.getElementById('user-name').textContent = 'Гость';
@@ -85,7 +91,6 @@ async function initUser() {
       return;
     }
 
-    // Ждём пока Telegram передаст данные пользователя
     await new Promise(resolve => setTimeout(resolve, 300));
 
     const user = tg.initDataUnsafe?.user;
@@ -110,14 +115,14 @@ async function initUser() {
       document.getElementById('user-id').textContent = 'ID: откройте в Telegram';
     }
   } catch (e) {
-    console.error('initUser error:', e);
+    alert('ОШИБКА: ' + e.message);
     document.getElementById('user-name').textContent = 'Гость';
     document.getElementById('user-id').textContent = 'ID: откройте в Telegram';
   }
 }
 
-// Запускаем после полной загрузки страницы
 window.addEventListener('load', () => setTimeout(initUser, 300));
+
 
 
 // ===== УТИЛИТЫ =====
